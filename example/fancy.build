@@ -1,0 +1,140 @@
+(in-package :fancybuild)
+
+(defun runp (cmd)
+  (assert (zerop (uiop:wait-process (uiop:launch-program cmd :output *standard-output* :error-output *error-output*)))))
+
+(defun target (name target)
+  (setf (gethash name *targets*) target))
+
+(defun mtime (x) (osicat-posix:stat-mtime (osicat-posix:stat x)))
+; todo blake3?
+(defun sha256 (fn)
+  (with-open-file (fp fn
+                      :direction :input
+                      :if-does-not-exist :error
+                      :element-type '(unsigned-byte 8))
+    (let ((buf (make-array (file-length fp) :element-type '(unsigned-byte 8))))
+      (read-sequence buf fp)
+      (ironclad:digest-sequence :sha256 buf))))
+
+(defun any (pred &rest lis)
+  (if (null (car lis))
+    nil
+    (or (apply pred (mapcar #'car lis))
+        (apply #'any (cons pred (mapcar #'cdr lis))))))
+(defun all (pred &rest lis)
+  (if (null (car lis))
+    t
+    (and (apply pred (mapcar #'car lis))
+         (apply #'all (cons pred (mapcar #'cdr lis))))))
+
+(defparameter *file-change-watchers* (make-hash-table :test #'equal))
+
+(defclass file-change-watcher ()
+  ((fpath :initarg :fpath)
+   (hash :initform nil)
+   (mtime :initform 0)))
+
+(defmethod freeze ((f file-change-watcher))
+  (setf (slot-value f 'hash) (sha256 (slot-value f 'fpath)))
+  (setf (slot-value f 'mtime) (mtime (slot-value f 'fpath)))
+  t)
+
+(defmethod file-changed ((f file-change-watcher))
+  (and (not (= (mtime (slot-value f 'fpath)) (slot-value f 'mtime)))
+       (not (equalp (sha256 (slot-value f 'fpath)) (slot-value f 'hash)))))
+
+(defun get-file-watcher (fpath purpose)
+  (let ((key (cons fpath purpose)))
+    (unless (gethash key *file-change-watchers*)
+      (setf (gethash key *file-change-watchers*)
+            (make-instance 'file-change-watcher :fpath fpath)))
+    (gethash key *file-change-watchers*)))
+
+; Rebuild whenever any of the output files doesn't exist
+; Or, whenever any of the input files has a newer mtime than any of the output files
+;  (that is, whenever the newest input file is newer than the oldest output file)
+; Or, whenever any of the input files has been modified
+(defclass rebuilt-on-change (buildable)
+  ((input-files :initarg :input-files :initform nil)
+   (input-objs)
+   (output-files :initarg :output-files :initform nil)
+   (purpose :initarg :purpose :initform nil)
+   (cached-snapshot :initform t)))
+
+(defmethod rebuild-change-init ((b rebuilt-on-change))
+  (setf (slot-value b 'input-objs)
+        (mapcar #'(lambda (x) (get-file-watcher x (slot-value b 'purpose))) (slot-value b 'input-files))))
+
+(defmethod snapshot ((b rebuilt-on-change))
+  (mapcar #'freeze (slot-value b 'input-objs))
+  t)
+
+(defmethod is-dirty ((b rebuilt-on-change) old)
+  (or (not (any #'probe-file (slot-value b 'output-files)))
+      (any #'file-changed (slot-value b 'input-objs))))
+
+(defclass c-source-buildable (rebuilt-on-change)
+  ((source-file :initarg :source-file)
+   (obj-file :initarg :obj-file)))
+
+(defclass c-binary-buildable (rebuilt-on-change)
+  ((target-binary :initarg :target-binary)
+   (obj-files)))
+
+(defmethod initialize-instance :after ((b c-binary-buildable) &key)
+  (setf (slot-value b 'obj-files) (mapcar #'(lambda (x) (slot-value x 'obj-file)) (remove-if-not #'(lambda (x) (typep x 'c-source-buildable)) (slot-value b 'dependencies))))
+  (setf (slot-value b 'input-files) (slot-value b 'obj-files))
+  (setf (slot-value b 'output-files) (list (slot-value b 'target-binary)))
+  (setf (slot-value b 'pretty-name) (slot-value b 'target-binary))
+  (setf (slot-value b 'purpose) 'c-binary-build)
+  (setf (slot-value b 'unique-key) (cons 'c-binary-buildable (cons (slot-value b 'target-binary) (slot-value b 'obj-files))))
+  (rebuild-change-init b))
+
+(defmethod do-build ((b c-binary-buildable))
+  (runp (format nil "cc -o ~a ~{~a~^ ~}" (slot-value b 'target-binary) (slot-value b 'obj-files))))
+
+(defmethod initialize-instance :after ((b c-source-buildable) &key)
+  (setf (slot-value b 'input-files) (list (slot-value b 'source-file)))
+  (setf (slot-value b 'output-files) (list (slot-value b 'obj-file)))
+  (setf (slot-value b 'pretty-name) (slot-value b 'source-file))
+  (setf (slot-value b 'purpose) 'c-source-build)
+  (setf (slot-value b 'unique-key) (list 'c-source-buildable (slot-value b 'obj-file) (slot-value b 'source-file)))
+  (rebuild-change-init b))
+
+(defmethod do-build ((b c-source-buildable))
+  (ensure-directories-exist (directory-namestring (slot-value b 'obj-file)))
+  (runp (format nil "cc -c -o ~a ~a" (slot-value b 'obj-file) (slot-value b 'source-file))))
+
+(defun c-source (file)
+  (make-instance 'c-source-buildable
+                 :source-file file
+                 :obj-file (format nil "build/~a.o" file)))
+(defun c-sourcelist (srclist)
+  (mapcar #'c-source srclist))
+;(c-sourcelist srclist)
+
+(defun c-binary (bin deps)
+  (make-instance 'c-binary-buildable
+                 :target-binary (format nil "build/~a" bin)
+                 :dependencies deps))
+
+(defparameter *t1*
+  (c-binary "test"
+            (c-sourcelist '("src/add.c" "src/test.c"))))
+(defparameter *t2*
+  (c-binary "test2"
+            (c-sourcelist '("src/add.c" "src/test2.c"))))
+
+;(defparameter x (make-instance 'c-source-buildable
+;                               :source-file "test/test.c"
+;                               :obj-file "build/test/test.o"))
+;(defparameter y (make-instance 'c-source-buildable
+;                               :source-file "test/add.c"
+;                               :obj-file "build/test/add.o"))
+;(defparameter z (make-instance 'c-binary-buildable
+;                               :target-binary "build/test/test"
+;                               :dependencies (list x y)))
+
+(target "default" *t1*)
+(target "other" *t2*)

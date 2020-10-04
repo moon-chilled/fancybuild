@@ -1,0 +1,11 @@
+#!/bin/sh
+
+#lisp=ccl
+lisp=sbcl
+
+case $1 in
+	run) rlwrap $lisp --eval "(require :asdf)" --eval "(asdf:load-system :fb)" --eval "(in-package :fancybuild)" --eval "(defun reload () (asdf:load-system :fb) (main))" --eval "(main)" ;;
+	image) $lisp --eval "(require :asdf)" --eval "(asdf:make :fb/image)" ;;
+	build) $lisp --eval "(require :asdf)" --eval "(asdf:make :fb/release)" ;;
+	*) echo "Usage: $0 <run|image|build>"; exit 1
+esac
