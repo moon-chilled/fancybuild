@@ -23,14 +23,17 @@
         (setf *global-cache* (conspack:decode buf)))))
 
   (load "fancy.build")
-  (let ((target (gethash (or (cadr sb-ext:*posix-argv*) "default") *targets*)))
-    (if target
-      (build target)
-      (format t "I don't know what to do with that...~%")))
 
-    (with-open-file (fp "fancy.buildcache"
-                        :direction :output
-                        :if-exists :overwrite
-                        :if-does-not-exist :create
-                        :element-type '(unsigned-byte 8))
-      (write-sequence (conspack:encode *global-cache*) fp)))
+  (mapcar #'(lambda (target-name)
+              (let ((target (gethash target-name *targets*)))
+                (if target
+                  (build target)
+                  (format t "No target named '~a'.~%" target-name))))
+          (or (cdr sb-ext:*posix-argv*) '("default")))
+
+  (with-open-file (fp "fancy.buildcache"
+                      :direction :output
+                      :if-exists :overwrite
+                      :if-does-not-exist :create
+                      :element-type '(unsigned-byte 8))
+    (write-sequence (conspack:encode *global-cache*) fp)))
