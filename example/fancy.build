@@ -1,6 +1,31 @@
 (defun runp (cmd)
   (assert (zerop (uiop:wait-process (uiop:launch-program cmd :output *standard-output* :error-output *error-output*)))))
 
+(defclass c-compiler (buildable)
+  ((cached-snapshot :accessor c-compiler-executable :initform nil)
+   (supports-md :initform nil)))
+(defmethod initialize-instance :after ((b c-compiler) &key)
+  (setf (unique-key b) 'cc))
+(defmethod do-build ((b c-compiler))
+  ; todo more sophisticated c compiler location mechanics
+  (runp "cc -v")
+  (setf (c-compiler-executable b) "cc -c")
+  (setf (slot-value b 'supports-md) t))
+(defmethod snapshot ((b c-compiler)) (c-compiler-executable b))
+(defmethod is-dirty ((b c-compiler) old) (not (string-equal (c-compiler-executable b) old)))
+
+; will this ever be different from the compiler?
+(defclass c-linker (buildable)
+  ((cached-snapshot :accessor c-linker-executable :initform nil)))
+(defmethod initialize-instance :after ((b c-linker) &key)
+  (setf (unique-key b) 'ccld))
+(defmethod do-build ((b c-linker))
+  ; todo: ditto more sophisticated
+  (runp "cc -v")
+  (setf (c-linker-executable b) "cc"))
+(defmethod snapshot ((b c-linker)) (c-linker-executable b))
+(defmethod is-dirty ((b c-linker) old) (not (string-equal (c-linker-executable b) old)))
+
 (defclass c-source-buildable (rebuilt-on-file-change)
   ((source-file :initarg :source-file)
    (obj-file :initarg :obj-file)))
@@ -10,24 +35,36 @@
    (obj-files)))
 
 (defmethod initialize-instance :after ((b c-binary-buildable) &key)
-  (setf (slot-value b 'obj-files) (mapcar #'(lambda (x) (slot-value x 'obj-file)) (remove-if-not #'(lambda (x) (typep x 'c-source-buildable)) (slot-value b 'dependencies))))
+  (setf (slot-value b 'obj-files)
+	(mapcar #'(lambda (x)
+		    (slot-value x 'obj-file))
+		(remove-if-not #'(lambda (x) (typep x 'c-source-buildable))
+			       (dependencies b))))
   (setf (slot-value b 'input-files) (slot-value b 'obj-files))
-  (setf (slot-value b 'output-files) (list (slot-value b 'target-binary)))
-  (setf (slot-value b 'pretty-name) (slot-value b 'target-binary))
-  (setf (slot-value b 'unique-key) (cons 'c-binary-buildable (cons (slot-value b 'target-binary) (slot-value b 'obj-files)))))
+  (setf (slot-value b 'output-files) `(,(slot-value b 'target-binary)))
+  (setf (pretty-name b) (slot-value b 'target-binary))
+  (setf (unique-key b) (cons 'c-binary-buildable (cons (slot-value b 'target-binary) (slot-value b 'obj-files))))
+  (push (make-instance 'c-linker) (dependencies b)))
 
 (defmethod do-build ((b c-binary-buildable))
-  (runp (format nil "cc -o ~a ~{~a~^ ~}" (slot-value b 'target-binary) (slot-value b 'obj-files))))
+  (runp (format nil "~a -o ~a ~{~a~^ ~}"
+		(c-linker-executable (car (dependencies b)))
+		(slot-value b 'target-binary)
+		(slot-value b 'obj-files))))
 
 (defmethod initialize-instance :after ((b c-source-buildable) &key)
-  (setf (slot-value b 'input-files) (list (slot-value b 'source-file)))
-  (setf (slot-value b 'output-files) (list (slot-value b 'obj-file)))
-  (setf (slot-value b 'pretty-name) (slot-value b 'source-file))
-  (setf (slot-value b 'unique-key) (list 'c-source-buildable (slot-value b 'obj-file) (slot-value b 'source-file))))
+  (setf (slot-value b 'input-files) `(,(slot-value b 'source-file)))
+  (setf (slot-value b 'output-files) `(,(slot-value b 'obj-file)))
+  (setf (pretty-name b) (slot-value b 'source-file))
+  (setf (unique-key b) `(c-source-buildable ,(slot-value b 'obj-file) ,(slot-value b 'source-file)))
+  (push (make-instance 'c-compiler) (dependencies b)))
 
 (defmethod do-build ((b c-source-buildable))
   (ensure-directories-exist (directory-namestring (slot-value b 'obj-file)))
-  (runp (format nil "cc -c -o ~a ~a" (slot-value b 'obj-file) (slot-value b 'source-file))))
+  (runp (format nil "~a -o ~a ~a"
+		(c-compiler-executable (car (dependencies b)))
+		(slot-value b 'obj-file)
+		(slot-value b 'source-file))))
 
 (defun c-source (file)
   (make-instance 'c-source-buildable
@@ -35,7 +72,6 @@
                  :obj-file (format nil "build/~a.o" file)))
 (defun c-sourcelist (srclist)
   (mapcar #'c-source srclist))
-;(c-sourcelist srclist)
 
 (defun c-binary (bin deps)
   (make-instance 'c-binary-buildable
@@ -48,16 +84,6 @@
 (defparameter *t2*
   (c-binary "test2"
             (c-sourcelist '("src/add.c" "src/test2.c"))))
-
-;(defparameter x (make-instance 'c-source-buildable
-;                               :source-file "test/test.c"
-;                               :obj-file "build/test/test.o"))
-;(defparameter y (make-instance 'c-source-buildable
-;                               :source-file "test/add.c"
-;                               :obj-file "build/test/add.o"))
-;(defparameter z (make-instance 'c-binary-buildable
-;                               :target-binary "build/test/test"
-;                               :dependencies (list x y)))
 
 (target "default" *t1*)
 (target "other" *t2*)

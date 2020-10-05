@@ -9,8 +9,10 @@
     :depends-on (#:osicat #:ironclad #:cl-conspack)
 
     :components ((:file "dependable")
+		 (:file "misc" :depends-on ("dependable"))
+		 (:file "parallel-build" :depends-on ("dependable" "misc"))
 		 (:file "buildables/rebuilt-on-file-change" :depends-on ("dependable"))
-		 (:file "fb-entry" :depends-on ("dependable")))
+		 (:file "fb-entry" :depends-on ("dependable" "parallel-build" "misc")))
 		 ;(:file "x" :depends-on ("y" "z"))
 
     :build-pathname "fb"
