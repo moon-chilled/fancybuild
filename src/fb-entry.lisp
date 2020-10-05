@@ -3,15 +3,30 @@
 (defparameter *targets* (make-hash-table :test #'equal))
 (defparameter *global-cache* (make-hash-table :test #'equal))
 
-;  (let ((proc (uiop:launch-program "sleep 0.4")))
-;    (format t "process is ~a.  Aliveness is ~a.  Waiting for it...~%" proc (uiop:process-alive-p proc))
-;    (uiop:wait-process proc)
-;    (format t "process is done!~%exiting~%"))
+(defun naively-build (b)
+  (mapcar #'naively-build (slot-value b 'dependencies))
+  (when (and (not (slot-value b 'cached-snapshot))
+             (slot-value b 'unique-key)
+             (gethash (slot-value b 'unique-key) *global-cache*))
+    (setf (slot-value b 'cached-snapshot) (gethash (slot-value b 'unique-key) *global-cache*)))
+
+  (unless (and (slot-value b 'cached-snapshot)
+               (not (is-dirty b (slot-value b 'cached-snapshot))))
+    (format t "Building ~a...~%" (slot-value b 'pretty-name))
+    (handler-case (do-build b)
+      (error ()
+             (format t "Error building ~a!~%" (slot-value b 'pretty-name))
+             (uiop:quit 1))))
+  (setf (slot-value b 'cached-snapshot) (snapshot b))
+  (when (slot-value b 'unique-key)
+    (setf (gethash (slot-value b 'unique-key) *global-cache*)
+          (slot-value b 'cached-snapshot)))
+  nil)
 
 (defun main ()
   (unless (probe-file "fancy.build")
     (format t "Could not find build description file 'fancy.build'.~%")
-    (uiop:quit))
+    (uiop:quit 1))
 
   (when (probe-file "fancy.buildcache")
     (with-open-file (fp "fancy.buildcache"
@@ -28,7 +43,7 @@
   (mapcar #'(lambda (target-name)
               (let ((target (gethash target-name *targets*)))
                 (if target
-                  (build target)
+                  (naively-build target)
                   (format t "No target named '~a'.~%" target-name))))
           (or (uiop:command-line-arguments) '("default")))
 
