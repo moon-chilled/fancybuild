@@ -20,7 +20,8 @@
                         :element-type '(unsigned-byte 8))
       (let ((buf (make-array (file-length fp) :element-type '(unsigned-byte 8))))
         (read-sequence buf fp)
-        (setf *global-cache* (conspack:decode buf)))))
+        (setf *global-cache*
+              (conspack:with-interning () (conspack:decode buf))))))
 
   (load "fancy.build")
 

@@ -65,7 +65,7 @@
   (setf (slot-value b 'input-files) (slot-value b 'obj-files))
   (setf (slot-value b 'output-files) (list (slot-value b 'target-binary)))
   (setf (slot-value b 'pretty-name) (slot-value b 'target-binary))
-  (setf (slot-value b 'unique-key) (cons "c-binary-buildable" (cons (slot-value b 'target-binary) (slot-value b 'obj-files)))))
+  (setf (slot-value b 'unique-key) (cons 'c-binary-buildable (cons (slot-value b 'target-binary) (slot-value b 'obj-files)))))
 
 (defmethod do-build ((b c-binary-buildable))
   (runp (format nil "cc -o ~a ~{~a~^ ~}" (slot-value b 'target-binary) (slot-value b 'obj-files))))
@@ -74,9 +74,7 @@
   (setf (slot-value b 'input-files) (list (slot-value b 'source-file)))
   (setf (slot-value b 'output-files) (list (slot-value b 'obj-file)))
   (setf (slot-value b 'pretty-name) (slot-value b 'source-file))
-  ; conspack doesn't automatically intern symbols so we have to use "c-source-buildable" instead of 'c-source-buildable
-  ; (because uninterned symbols aren't equal to anything)
-  (setf (slot-value b 'unique-key) (list "c-source-buildable" (slot-value b 'obj-file) (slot-value b 'source-file))))
+  (setf (slot-value b 'unique-key) (list 'c-source-buildable (slot-value b 'obj-file) (slot-value b 'source-file))))
 
 (defmethod do-build ((b c-source-buildable))
   (ensure-directories-exist (directory-namestring (slot-value b 'obj-file)))
