@@ -28,28 +28,12 @@
     (and (apply pred (mapcar #'car lis))
          (apply #'all (cons pred (mapcar #'cdr lis))))))
 
-(defparameter *file-change-watchers* (make-hash-table :test #'equal))
+(defun freeze-file-state (fpath)
+  (cons (mtime fpath) (sha256 fpath)))
 
-(defclass file-change-watcher ()
-  ((fpath :initarg :fpath)
-   (hash :initform nil)
-   (mtime :initform 0)))
-
-(defmethod freeze ((f file-change-watcher))
-  (setf (slot-value f 'hash) (sha256 (slot-value f 'fpath)))
-  (setf (slot-value f 'mtime) (mtime (slot-value f 'fpath)))
-  t)
-
-(defmethod file-changed ((f file-change-watcher))
-  (and (not (= (mtime (slot-value f 'fpath)) (slot-value f 'mtime)))
-       (not (equalp (sha256 (slot-value f 'fpath)) (slot-value f 'hash)))))
-
-(defun get-file-watcher (fpath purpose)
-  (let ((key (cons fpath purpose)))
-    (unless (gethash key *file-change-watchers*)
-      (setf (gethash key *file-change-watchers*)
-            (make-instance 'file-change-watcher :fpath fpath)))
-    (gethash key *file-change-watchers*)))
+(defun has-file-changed (fpath state)
+  (and (not (= (mtime fpath) (car state)))
+       (not (equalp (sha256 fpath) (cdr state)))))
 
 ; Rebuild whenever any of the output files doesn't exist
 ; Or, whenever any of the input files has a newer mtime than any of the output files
@@ -57,22 +41,16 @@
 ; Or, whenever any of the input files has been modified
 (defclass rebuilt-on-change (buildable)
   ((input-files :initarg :input-files :initform nil)
-   (input-objs)
-   (output-files :initarg :output-files :initform nil)
-   (purpose :initarg :purpose :initform nil)
-   (cached-snapshot :initform t)))
-
-(defmethod rebuild-change-init ((b rebuilt-on-change))
-  (setf (slot-value b 'input-objs)
-        (mapcar #'(lambda (x) (get-file-watcher x (slot-value b 'purpose))) (slot-value b 'input-files))))
+   (output-files :initarg :output-files :initform nil)))
 
 (defmethod snapshot ((b rebuilt-on-change))
-  (mapcar #'freeze (slot-value b 'input-objs))
-  t)
+  (mapcar #'freeze-file-state (slot-value b 'input-files)))
 
 (defmethod is-dirty ((b rebuilt-on-change) old)
   (or (not (any #'probe-file (slot-value b 'output-files)))
-      (any #'file-changed (slot-value b 'input-objs))))
+      (> (reduce #'max (mapcar #'mtime (slot-value b 'input-files)))
+	 (reduce #'min (mapcar #'mtime (slot-value b 'output-files))))
+      (any #'has-file-changed (slot-value b 'input-files) old)))
 
 (defclass c-source-buildable (rebuilt-on-change)
   ((source-file :initarg :source-file)
@@ -87,9 +65,7 @@
   (setf (slot-value b 'input-files) (slot-value b 'obj-files))
   (setf (slot-value b 'output-files) (list (slot-value b 'target-binary)))
   (setf (slot-value b 'pretty-name) (slot-value b 'target-binary))
-  (setf (slot-value b 'purpose) 'c-binary-build)
-  (setf (slot-value b 'unique-key) (cons 'c-binary-buildable (cons (slot-value b 'target-binary) (slot-value b 'obj-files))))
-  (rebuild-change-init b))
+  (setf (slot-value b 'unique-key) (cons "c-binary-buildable" (cons (slot-value b 'target-binary) (slot-value b 'obj-files)))))
 
 (defmethod do-build ((b c-binary-buildable))
   (runp (format nil "cc -o ~a ~{~a~^ ~}" (slot-value b 'target-binary) (slot-value b 'obj-files))))
@@ -98,9 +74,9 @@
   (setf (slot-value b 'input-files) (list (slot-value b 'source-file)))
   (setf (slot-value b 'output-files) (list (slot-value b 'obj-file)))
   (setf (slot-value b 'pretty-name) (slot-value b 'source-file))
-  (setf (slot-value b 'purpose) 'c-source-build)
-  (setf (slot-value b 'unique-key) (list 'c-source-buildable (slot-value b 'obj-file) (slot-value b 'source-file)))
-  (rebuild-change-init b))
+  ; conspack doesn't automatically intern symbols so we have to use "c-source-buildable" instead of 'c-source-buildable
+  ; (because uninterned symbols aren't equal to anything)
+  (setf (slot-value b 'unique-key) (list "c-source-buildable" (slot-value b 'obj-file) (slot-value b 'source-file))))
 
 (defmethod do-build ((b c-source-buildable))
   (ensure-directories-exist (directory-namestring (slot-value b 'obj-file)))

@@ -12,11 +12,25 @@
   (unless (probe-file "fancy.build")
     (format t "Could not find build description file 'fancy.build'.~%")
     (uiop:quit))
+
+  (when (probe-file "fancy.buildcache")
+    (with-open-file (fp "fancy.buildcache"
+                        :direction :input
+                        :if-does-not-exist :error
+                        :element-type '(unsigned-byte 8))
+      (let ((buf (make-array (file-length fp) :element-type '(unsigned-byte 8))))
+        (read-sequence buf fp)
+        (setf *global-cache* (conspack:decode buf)))))
+
   (load "fancy.build")
   (let ((target (gethash (or (cadr sb-ext:*posix-argv*) "default") *targets*)))
     (if target
-      (progn
-        (build target)
-        (read-line *standard-input*)
-        (build target))
-      (format t "I don't know what to do with that...~%"))))
+      (build target)
+      (format t "I don't know what to do with that...~%")))
+
+    (with-open-file (fp "fancy.buildcache"
+                        :direction :output
+                        :if-exists :overwrite
+                        :if-does-not-exist :create
+                        :element-type '(unsigned-byte 8))
+      (write-sequence (conspack:encode *global-cache*) fp)))

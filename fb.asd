@@ -6,7 +6,7 @@
     ;:serial nil
     :pathname "src/"
 
-    :depends-on (#:osicat #:ironclad)
+    :depends-on (#:osicat #:ironclad #:cl-conspack)
 
     :components ((:file "dependable")
 		 (:file "fb-entry" :depends-on ("dependable")))
