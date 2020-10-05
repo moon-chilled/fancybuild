@@ -1,0 +1,10 @@
+Fancy build: grand unified build system for all and sundry.
+
+Models constraints of and is able to interoperate with any other build system.
+(Ideally.  In practice, something like scons will be impractical; but make,
+ cargo, cpan, dub, etc. are fine.)
+
+Closest in design to shake (https://shakebuild.com/).  Primary differences:
+ - Build starts instantly.  No need to build your build file.
+ - No conflation of build targets with on-disc files.  Represent deployment,
+   dependencies from (network) package registry, ...
