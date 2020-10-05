@@ -29,7 +29,7 @@
                 (if target
                   (build target)
                   (format t "No target named '~a'.~%" target-name))))
-          (or (cdr sb-ext:*posix-argv*) '("default")))
+          (or (uiop:command-line-arguments) '("default")))
 
   (with-open-file (fp "fancy.buildcache"
                       :direction :output
