@@ -4,7 +4,7 @@
 
 (defun main ()
   (unless (probe-file "fancy.build")
-    (die "Could not find build description file 'fancy.build'."))
+    (die "could not find build description file 'fancy.build'"))
 
   (when (probe-file "fancy.buildcache")
     (with-open-file (fp "fancy.buildcache"
@@ -21,12 +21,11 @@
     (load "fancy.build"))
 
   (let ((targets-list (mapcar #'(lambda (name)
-                                  (or (gethash name *targets*) (die "No target named '~a'." name)))
+                                  (or (gethash name *targets*) (die "no target named '~a'" name)))
                               (or (uiop:command-line-arguments) '("default")))))
     (parallel-build (if (cdr targets-list)
                       (make-instance 'buildable :dependencies targets-list)
                       (car targets-list))))
-                  ;(naively-build target)
 
 
   (with-open-file (fp "fancy.buildcache"

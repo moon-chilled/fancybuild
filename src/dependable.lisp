@@ -11,7 +11,7 @@
 (defclass buildable ()
   ((dependencies :initarg :dependencies :initform nil :accessor dependencies)
    (cached-snapshot :initform nil)
-   (pretty-name :initarg :pretty-name :initform "" :accessor pretty-name)
+   (pretty-name :initarg :pretty-name :initform nil :accessor pretty-name)
    (unique-key :initform nil :accessor unique-key)))
 
 (defgeneric snapshot (buildable))

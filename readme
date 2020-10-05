@@ -4,7 +4,45 @@ Models constraints of and is able to interoperate with any other build system.
 (Ideally.  In practice, something like scons will be impractical; but make,
  cargo, cpan, dub, etc. are fine.)
 
-Closest in design to shake (https://shakebuild.com/).  Primary differences:
- - Build starts instantly.  No need to build your build file.
+Pros:
+ - Fast
+   * Don't do any more work than you have to
+     + SCons, redo, and bazel (and bazel's derivatives--buck, please, etc.)
+       get this right.  Most others (make, ninja, etc.) don't.
+       × ninja has an open ticket to resolve this, but maintainers seem
+         uninterested in resolving it.  (https://github.com/ninja-build/ninja/issues/1459)
+     + Example: purely syntactic (not semantic) change shouldn't require a re-link.
+   * Parallel
+ - Correct
+   * Always rebuild if you have to
+     + SCons, redo, and bazel&co (again) get this right.
+     + Example: update system c compiler or headers.
+       × For some, even just updating locally-referenced headers is enough.
+ - Easy to use for tiny projects, but programmable enough to scale indefinitely
+   * SCons hits these points, but it's slow; not pathologically so, just incidentally.
+   * Redo uses shell, which has difficulty with abstraction.
+   * Ditto make.
+   * Bazel (and derivatives) are interesting:
+     + Reasonably powerful programming language
+     + Build description for a toy project looks reasonable: 5
+       lines indicating source and target files.
+     But:
+     + Heavyweight.  Slow startup time is solved by running a persistent build
+       server; not unreasonable for google-scale projects but that seems like
+       overkill when you look at the 20-line build description it executes.
+     + Builtin build rules insufficiently introspectible or modifiable.
+       For example, changing the toolchain used, or the build flags, is much
+       more complex than it need be--than it is, in most build systems.
+       × Partly, this is just because those build rules don't expose hooks to
+         modify those attributes.  But mostly it's because the build language
+         doesn't lend itself well to such dynamism, so it's not encouraged.
+       × (https://github.com/bazelbuild/bazel/issues/2954,
+          https://github.com/bazelbuild/bazel/issues/4644)
+         It's not a problem that such bugs exist, but it is a problem that
+         they can't be easily fixed or worked around 'in userspace'.  
+
+The closest build systems to solving all these are SCons and Shake
+(https://shakebuild.com/).  SCons is slow.  Compared with shake, we have:
  - No conflation of build targets with on-disc files.  Represent deployment,
    dependencies from (network) package registry, ...
+ - Build starts instantly.  No need to build your build file.

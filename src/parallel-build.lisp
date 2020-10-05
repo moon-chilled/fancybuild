@@ -38,7 +38,7 @@
             :do (let ((b (pop currently-buildable)))
                   (when (check-dirty (parallel-buildable-base b))
                     (awhen (pretty-name (parallel-buildable-base b))
-                           (format t "Building ~a...~%" -))
+                           (notice "building ~a..." -))
                     (do-build (parallel-buildable-base b))
                     (setf (slot-value (parallel-buildable-base b) 'cached-snapshot) (snapshot (parallel-buildable-base b)))
                     (setf (gethash (unique-key (parallel-buildable-base b)) *global-cache*) (slot-value (parallel-buildable-base b) 'cached-snapshot)))

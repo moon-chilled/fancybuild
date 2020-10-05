@@ -1,5 +1,6 @@
 (defun runp (cmd)
-  (assert (zerop (uiop:wait-process (uiop:launch-program cmd :output *standard-output* :error-output *error-output*)))))
+  (unless (zerop (uiop:wait-process (uiop:launch-program cmd :output *standard-output* :error-output *error-output*)))
+    (die "command '~a' failed" cmd)))
 
 (defclass c-compiler (buildable)
   ((cached-snapshot :accessor c-compiler-executable :initform nil)
