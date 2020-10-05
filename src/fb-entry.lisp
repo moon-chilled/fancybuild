@@ -1,7 +1,12 @@
 (in-package :fancybuild)
 
+(export '(target main))
+
 (defparameter *targets* (make-hash-table :test #'equal))
 (defparameter *global-cache* (make-hash-table :test #'equal))
+
+(defun target (name target)
+  (setf (gethash name *targets*) target))
 
 (defun naively-build (b)
   (mapcar #'naively-build (slot-value b 'dependencies))
@@ -38,7 +43,9 @@
         (setf *global-cache*
               (conspack:with-interning () (conspack:decode buf))))))
 
-  (load "fancy.build")
+  (progn
+    (in-package :fancily-built)
+    (load "fancy.build"))
 
   (mapcar #'(lambda (target-name)
               (let ((target (gethash target-name *targets*)))

@@ -1,6 +1,10 @@
 (defpackage #:fancybuild
   (:use #:cl)
-  (:export #:main))
+  (:export #:buildable #:dependencies #:cached-snapshot #:pretty-name #:unique-key #:snapshot #:do-build #:is-dirty))
+
+; package in which build scripts run
+(defpackage #:fancily-built
+  (:use #:cl #:fancybuild))
 
 (in-package :fancybuild)
 

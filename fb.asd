@@ -9,6 +9,7 @@
     :depends-on (#:osicat #:ironclad #:cl-conspack)
 
     :components ((:file "dependable")
+		 (:file "buildables/rebuilt-on-file-change" :depends-on ("dependable"))
 		 (:file "fb-entry" :depends-on ("dependable")))
 		 ;(:file "x" :depends-on ("y" "z"))
 
