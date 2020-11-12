@@ -4,7 +4,7 @@ Models constraints of and is able to interoperate with any other build system.
 (Ideally.  In practice, something like scons will be impractical; but make,
  cargo, cpan, dub, etc. are fine.)
 
-Pros:
+Pros (consider these aspirational):
  - Fast
    * Don't do any more work than you have to
      + SCons, redo, and bazel (and bazel's derivatives--buck, please, etc.)
