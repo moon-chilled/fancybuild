@@ -3,7 +3,6 @@
 
 (defsystem "fb"
     :name "Fancy Build"
-    ;:serial nil
     :pathname "src/"
 
     :depends-on (#:osicat #:ironclad #:cl-conspack)
@@ -13,7 +12,6 @@
 		 (:file "parallel-build" :depends-on ("dependable" "misc"))
 		 (:file "buildables/rebuilt-on-file-change" :depends-on ("dependable"))
 		 (:file "fb-entry" :depends-on ("dependable" "parallel-build" "misc")))
-		 ;(:file "x" :depends-on ("y" "z"))
 
     :build-pathname "fb"
     :entry-point "fancybuild:main")

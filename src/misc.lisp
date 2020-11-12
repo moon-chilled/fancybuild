@@ -11,9 +11,6 @@
 (defmacro awhen (test &body body)
   `(let ((- ,test))
      (when - ,@body)))
-(defmacro aunless (test &body body)
-  `(let ((- ,test))
-     (unless - ,@body)))
 
 (defun stdout-tty-p () (interactive-stream-p *standard-output*))
 
